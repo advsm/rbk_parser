@@ -1,0 +1,79 @@
+version: '3'
+
+services:
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    ports:
+      - ${NGINX_PORT}:80
+      - ${NGINX_PORT_SSL}:443
+    volumes:
+      - ./etc/nginx/yii.conf:/etc/nginx/conf.d/yii.conf
+      - ./yii/backend/web:/var/www/pp/yii/backend/web
+    depends_on:
+      - phpfpm
+    working_dir: /etc/nginx
+
+  phpfpm:
+    container_name: phpfpm
+    build:
+      context: ./
+      dockerfile: ./etc/php/dockerfile-fpm
+    volumes:
+      - ./yii:/var/www/pp/yii
+      - ./etc/php/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+    depends_on:
+      - mysql
+      - migration
+    links:
+      - mysql
+
+  phpcli:
+    container_name: phpcli
+    build:
+      context: ./
+      dockerfile: ./etc/php/dockerfile-cli
+    volumes:
+      - ./yii:/var/www/pp/yii
+      - ./etc/php/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+    tty: true
+    depends_on:
+      - mysql
+      - migration
+    environment:
+      - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
+    working_dir: /var/www/pp/yii
+
+  migration:
+    container_name: migration
+    build:
+      context: ./
+      dockerfile: ./etc/php/dockerfile-migration
+    volumes:
+      - ./yii:/var/www/pp/yii
+    depends_on:
+      - mysql
+    working_dir: /var/www/pp/yii
+
+  mysql:
+    container_name: mysql
+    command: "--innodb_use_native_aio=0"
+    build:
+      context: ./
+      dockerfile: ./etc/mysql/dockerfile
+    #restart: always
+    ports:
+      - ${MYSQL_PORT}:3306
+    volumes:
+      - ./etc/mysql/start.sql:/docker-entrypoint-initdb.d/start.sql
+      - ./tmp/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - DUMP_FILE=${MYSQL_DUMP_FILE}
+    working_dir: /etc/mysql
+
+
