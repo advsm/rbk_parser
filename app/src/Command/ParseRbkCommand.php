@@ -38,20 +38,75 @@ class ParseRbkCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $site = 'https://www.rbc.ru/';
+        $output->writeln("Start parsing $site");
         $client = HttpClient::create();
-        $response = $client->request('GET', 'https://www.rbc.ru/');
+        $response = $client->request('GET', $site);
+        $statusCode = $response->getStatusCode();
+        if ($statusCode !== 200) {
+            $output->writeln("Site unavailable, expected status code 200, given: $statusCode");
+            return Command::FAILURE;
+        }
+
         $content = $response->getContent();
+        $output->writeln("Response given, start analysing content body");
 
         $crawler = new Crawler($content);
-        $feeds = $crawler->filter('.main__feed a');
+        $selector = '.main__feed a';
+        $feeds = $crawler->filter($selector);
+
+        $count = $feeds->count();
+        $output->writeln("$site body contains $count blocks selected with $selector");
+        if ($count === 0) {
+            return Command::FAILURE;
+        }
 
         foreach ($feeds as $feed) {
+            $name = trim($feed->nodeValue);
             $url = $feed->getAttribute('href');
+
+            $output->writeln("Parsing news with name: $name");
+            $output->writeln("Trying to connect to $url");
+
             $response = $client->request('GET', $url);
+            $statusCode = $response->getStatusCode();
+            if ($statusCode !== 200) {
+                $output->writeln("Site unavailable, expected status code 200, given: $statusCode");
+                return Command::FAILURE;
+            }
 
             $crawler = new Crawler($response->getContent());
-            $promo = $crawler->filter('.article__text__overview')->text();
-            $imageUrl = $crawler->filter('.article__main-image__wrap img')->attr('src');
+            $selector = '.article__text__overview';
+            $nodes = $crawler->filter($selector);
+            $count = $nodes->count();
+            $output->writeln("$url body contains $count blocks selected with $selector");
+            if (($count === 0) || ($count > 1)) {
+                return Command::FAILURE;
+            }
+
+            $promo = $nodes->text();
+            $output->writeln("Promo: $promo");
+
+
+            $selectors = ['.article__main-image__wrap img', '.fotorama img', 'img.g-image'];
+            $imageUrl = null;
+            foreach ($selectors as $selector) {
+                $nodes = $crawler->filter($selector);
+                $count = $nodes->count();
+                $output->writeln("$url body contains $count blocks selected with $selector");
+                if ($count === 0) {
+                    $output->writeln('Trying next selector');
+                    continue;
+                }
+
+                $imageUrl = $nodes->attr('src');
+                $output->writeln("Image url: $imageUrl");
+            }
+
+            if ($imageUrl === null) {
+                $output->writeln("Image url don't found");
+                return COMMAND::FAILURE;
+            }
 
             $news = new News();
             $news->setName($feed->nodeValue);
@@ -63,22 +118,13 @@ class ParseRbkCommand extends Command
             $this->entityManager->persist($news);
         }
 
-        // действительно выполните запросы (например, запрос INSERT)
+        $output->writeln("Nodes successfully iterated");
         $this->entityManager->flush();
 
-        // этот метод должен вернуть целое число с "кодом завершения"
-        // команды. Вы также можете использовать это константы, чтобы сделать код более читаемым
-
-        // вернуть это, если при выполнении команды не было проблем
-        // (равноценно возвращению int(0))
         return Command::SUCCESS;
 
         // или вернуть это, если во время выполнения возникла ошибка
         // (равноценно возвращению int(1))
         // return Command::FAILURE;
-
-        // или вернуть это, чтобы указать на неправильное использование команды, например, невалидные опции
-        // или отсутствующие аргументы (равноценно возвращению int(2))
-        // return Command::INVALID
     }
 }
