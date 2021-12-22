@@ -8,9 +8,21 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\DomCrawler\Crawler;
 
+use App\Entity\News;
+use Doctrine\ORM\EntityManagerInterface;
+
 class ParseRbkCommand extends Command
 {
     protected static $defaultName = 'parse:rbk';
+
+    private $entityManager;
+
+    public function __construct(EntityManagerInterface $entityManager)
+    {
+        $this->entityManager = $entityManager;
+
+        parent::__construct();
+    }
 
     protected function configure(): void
     {
@@ -26,34 +38,33 @@ class ParseRbkCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-
-
         $client = HttpClient::create();
         $response = $client->request('GET', 'https://www.rbc.ru/');
-
-        $statusCode = $response->getStatusCode();
-        // $statusCode = 200
-
-        $contentType = $response->getHeaders()['content-type'][0];
-        // $contentType = 'application/json'
-
         $content = $response->getContent();
 
         $crawler = new Crawler($content);
-        $feeds = $crawler->filter('.main__feed');
+        $feeds = $crawler->filter('.main__feed a');
 
         foreach ($feeds as $feed) {
-            $uri = $feed->filter('a')->getUri();
-            $output->writeln($uri);
+            $url = $feed->getAttribute('href');
+            $response = $client->request('GET', $url);
+
+            $crawler = new Crawler($response->getContent());
+            $promo = $crawler->filter('.article__text__overview')->text();
+            $imageUrl = $crawler->filter('.article__main-image__wrap img')->attr('src');
+
+            $news = new News();
+            $news->setName($feed->nodeValue);
+            $news->setUrl($feed->getAttribute('href'));
+            $news->setPromo($promo);
+            $news->setImageUrl($imageUrl);
+
+            // сообщите Doctrine, что вы хотите (в итоге) сохранить Продукт (пока без запросов)
+            $this->entityManager->persist($news);
         }
 
-
-
-        // $content = '{"id":521583, "name":"symfony-docs", ...}'
-
-
-
-
+        // действительно выполните запросы (например, запрос INSERT)
+        $this->entityManager->flush();
 
         // этот метод должен вернуть целое число с "кодом завершения"
         // команды. Вы также можете использовать это константы, чтобы сделать код более читаемым
