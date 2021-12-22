@@ -62,11 +62,28 @@ class ParseRbkCommand extends Command
         }
 
         foreach ($feeds as $feed) {
-            $name = trim($feed->nodeValue);
-            $url = $feed->getAttribute('href');
 
-            $output->writeln("Parsing news with name: $name");
+            $url = $feed->getAttribute('href');
+            $output->writeln("Search is url already parsed: $url");
+
+            $news = $this->entityManager
+                ->getRepository(News::class)
+                ->findOneBy(['url' => $url]);
+
+            if ($news) {
+                $output->writeln("News already exists, so skip it");
+                continue;
+            }
+
+            $news = new News();
             $output->writeln("Trying to connect to $url");
+            $news->setUrl($url);
+
+            $name = trim($feed->nodeValue);
+            $output->writeln("Parsing news with name: $name");
+            $news->setName($name);
+
+
 
             $response = $client->request('GET', $url);
             $statusCode = $response->getStatusCode();
@@ -76,16 +93,29 @@ class ParseRbkCommand extends Command
             }
 
             $crawler = new Crawler($response->getContent());
-            $selector = '.article__text__overview';
-            $nodes = $crawler->filter($selector);
-            $count = $nodes->count();
-            $output->writeln("$url body contains $count blocks selected with $selector");
-            if (($count === 0) || ($count > 1)) {
-                return Command::FAILURE;
+
+            $promo = null;
+            $selectors = ['.article__text__overview', '.article__text p'];
+            foreach ($selectors as $selector) {
+                $nodes = $crawler->filter($selector);
+                $count = $nodes->count();
+                $output->writeln("$url body contains $count blocks selected with $selector");
+                if ($count === 0) {
+                    $output->writeln('Trying next selector');
+                    continue;
+                }
+
+                $promo = $nodes->text();
+                $output->writeln("Promo: $promo");
+                break;
             }
 
-            $promo = $nodes->text();
-            $output->writeln("Promo: $promo");
+            if ($promo === null) {
+                $output->writeln("Promo don't found");
+                return COMMAND::FAILURE;
+            }
+
+            $news->setPromo($promo);
 
 
             $selectors = ['.article__main-image__wrap img', '.fotorama img', 'img.g-image'];
@@ -101,18 +131,15 @@ class ParseRbkCommand extends Command
 
                 $imageUrl = $nodes->attr('src');
                 $output->writeln("Image url: $imageUrl");
+                break;
             }
 
-            if ($imageUrl === null) {
+            if ($imageUrl !== null) {
+                $news->setImageUrl($imageUrl);
+            } else {
                 $output->writeln("Image url don't found");
-                return COMMAND::FAILURE;
             }
 
-            $news = new News();
-            $news->setName($feed->nodeValue);
-            $news->setUrl($feed->getAttribute('href'));
-            $news->setPromo($promo);
-            $news->setImageUrl($imageUrl);
 
             // сообщите Doctrine, что вы хотите (в итоге) сохранить Продукт (пока без запросов)
             $this->entityManager->persist($news);

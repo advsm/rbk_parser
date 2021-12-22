@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
  *
  * @ORM\Table(name="news", uniqueConstraints={@ORM\UniqueConstraint(name="url", columns={"url"})})
  * @ORM\Entity
+ * @ORM\HasLifecycleCallbacks
  */
 class News
 {
@@ -45,7 +46,7 @@ class News
     /**
      * @var string
      *
-     * @ORM\Column(name="image_url", type="string", length=256, nullable=false)
+     * @ORM\Column(name="image_url", type="string", length=256, nullable=true)
      */
     private $imageUrl;
 
@@ -68,7 +69,7 @@ class News
      *
      * @ORM\Column(name="modified_at", type="datetime", nullable=false, options={"default"="CURRENT_TIMESTAMP"})
      */
-    private $modifiedAt = 'CURRENT_TIMESTAMP';
+    private $modifiedAt;
 
     public function getId(): ?int
     {
@@ -159,5 +160,16 @@ class News
         return $this;
     }
 
+
+    /**
+     * Gets triggered only on insert
+
+     * @ORM\PrePersist
+     */
+    public function onPrePersist()
+    {
+        $this->setCreatedAt(new \DateTime("now"));
+        $this->setModifiedAt(new \DateTime("now"));
+    }
 
 }

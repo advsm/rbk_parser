@@ -6,10 +6,10 @@ create table `news` (
    `name` varchar(256) collate utf8_unicode_ci not null,
    `promo` varchar(512) collate utf8_unicode_ci not null,
    `url` varchar(256) collate utf8_unicode_ci not null,
-   `image_url` varchar(256) collate utf8_unicode_ci not null,
+   `image_url` varchar(256) collate utf8_unicode_ci null,
    `text` text collate utf8_unicode_ci null,
    `created_at` datetime not null,
-   `modified_at` timestamp not null default current_timestamp on update current_timestamp,
+   `modified_at` timestamp not null on update current_timestamp,
     unique key (`url`),
     primary key (`id`)
 ) engine=InnoDB default charset=utf8 collate=utf8_unicode_ci;
