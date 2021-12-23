@@ -17,12 +17,6 @@ class NewsController extends AbstractController
         $repository = $doctrine->getRepository(News::class);
         $news = $repository->findBy(criteria: [], orderBy: ['id' => 'DESC'], limit: 15);
 
-        foreach ($news as $row) {
-            //cho $row->getName() . "<br />";
-        }
-        //var_dump($news);die();
-
-
         return $this->render('news/index.html.twig', [
             'news' => $news,
         ]);
